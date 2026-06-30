@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智慧識別加解密網頁</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            max-width: 600px;
+            margin: 40px auto;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            background: #fff;
+        }
+        h2 { text-align: center; color: #2c3e50; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"], textarea, select {
+            width: 100%;
+            padding: 10px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        textarea { height: 100px; resize: vertical; }
+        .btn-group { display: flex; gap: 10px; margin-top: 10px; }
+        button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 4px;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-encode { background-color: #3498db; }
+        .btn-encode:hover { background-color: #2980b9; }
+        .btn-decode { background-color: #2ecc71; }
+        .btn-decode:hover { background-color: #27ae60; }
+        .btn-copy { background-color: #e67e22; }
+        .btn-copy:hover { background-color: #d35400; }
+        .info-box {
+            background-color: #e8f4fd;
+            border-left: 4px solid #3498db;
+            padding: 10px;
+            margin-bottom: 15px;
+            font-size: 14px;
+            border-radius: 0 4px 4px 0;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>🔐 智慧識別加解密網頁</h2>
+
+    <div class="info-box">
+        💡 <b>運作機制：</b><br>
+        • 模式一 <code>00000</code> → 對應密碼：AlphaSecret<br>
+        • 模式二 <code>11111</code> → 對應密碼：BetaSecret<br>
+        • 模式三 <code>10101</code> → 對應密碼：GammaSecret
+    </div>
+
+    <div class="form-group">
+        <label for="encryptMode">⚙️ 選擇加密模式 (僅加密時需要選擇)：</label>
+        <select id="encryptMode">
+            <option value="00000">模式一 (前綴: 00000)</option>
+            <option value="11111">模式二 (前綴: 11111)</option>
+            <option value="10101">模式三 (前綴: 10101)</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="inputText">📝 輸入文字：</label>
+        <textarea id="inputText" placeholder="加密：輸入英文文字&#10;解密：直接貼上密文，系統會自動辨識前 5 碼並解密..."></textarea>
+    </div>
+
+    <div class="btn-group">
+        <button class="btn-encode" onclick="encodeProcess()">▲ 加密 (自動嵌入前綴)</button>
+        <button class="btn-decode" onclick="decodeProcess()">▼ 智慧解密 (自動識別)</button>
+    </div>
+
+    <div class="form-group" style="margin-top: 20px;">
+        <label for="statusText">📢 系統狀態：</label>
+        <input type="text" id="statusText" readonly style="background:#eee; color:#555;" value="準備就緒">
+    </div>
+
+    <div class="form-group">
+        <label for="outputText">✨ 輸出結果：</label>
+        <textarea id="outputText" readonly placeholder="結果會顯示在這裡..."></textarea>
+    </div>
+
+    <button class="btn-copy" onclick="copyResult()">📋 一鍵複製結果</button>
+
+<script>
+// 基礎字元
+const CHARS = [
+    'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p',
+    'q','r','s','t','u','v','w','x','y','z',' ','。','？','，','[',']'
+];
+
+const BASE_BINARIES = [
+    "00001", "01101", "01000", "11011", "00101", "11110", "10000", "01001",
+    "11000", "00011", "01010", "10100", "00110", "10001", "10010", "11001",
+    "00111", "10110", "11010", "10111", "01011", "11101", "00010", "10011",
+    "00100", "01100", "11111", "10101", "01110", "11100", "00000", "11000"
+];
+
+// 📊 模式與密碼的對應表 (你可以在這裡修改你的密碼和前綴)
+const MODE_CONFIG = {
+    "00000": "AlphaSecret", // 模式一的密碼
+    "11111": "BetaSecret",  // 模式二的密碼
+    "10101": "GammaSecret"  // 模式三的密碼
+};
+
+// 偽隨機數產生器
+function cyrb128(str) {
+    let h1 = 1779033703, h2 = 3024734765, h3 = 3362453663, h4 = 502494325;
+    for (let i = 0, k; i < str.length; i++) {
+        k = str.charCodeAt(i);
+        h1 = h2 ^ Math.imul(h1 ^ k, 597399067);
+        h2 = h3 ^ Math.imul(h2 ^ k, 2869860233);
+        h3 = h4 ^ Math.imul(h3 ^ k, 951274213);
+        h4 = h1 ^ Math.imul(h4 ^ k, 2716044179);
+    }
+    h1 = Math.imul(h3 ^ (h1 >>> 18), 597399067);
+    h2 = Math.imul(h4 ^ (h2 >>> 22), 2869860233);
+    h3 = Math.imul(h1 ^ (h3 >>> 17), 951274213);
+    h4 = Math.imul(h2 ^ (h4 >>> 19), 2716044179);
+    return [(h1^h2^h3^h4)>>>0, (h2^h1)>>>0, (h3^h1)>>>0, (h4^h1)>>>0];
+}
+
+function sfc32(a, b, c, d) {
+    return function() {
+        a >>>= 0; b >>>= 0; c >>>= 0; d >>>= 0;
+        var t = (a + b) | 0;
+        a = b ^ (b >>> 9);
+        b = (c + (c << 3)) | 0;
+        c = (c << 21) | (c >>> 11);
+        d = (d + 1) | 0;
+        t = (t + d) | 0;
+        c = (c + t) | 0;
+        return (t >>> 0) / 4294967296;
+    }
+}
+
+function getDynamicMap(key) {
+    let binaries = [...BASE_BINARIES];
+    if (key.trim() !== "") {
+        let seed = cyrb128(key);
+        let rand = sfc32(seed[0], seed[1], seed[2], seed[3]);
+        for (let i = binaries.length - 1; i > 0; i--) {
+            const j = Math.floor(rand() * (i + 1));
+            [binaries[i], binaries[j]] = [binaries[j], binaries[i]];
+        }
+    }
+    
+    let charToBin = {};
+    let binToChar = {};
+    CHARS.forEach((char, index) => {
+        charToBin[char] = binaries[index];
+        binToChar[binaries[index]] = char;
+    });
+    return { charToBin, binToChar };
+}
+
+// 執行加密
+function encodeProcess() {
+    const mode = document.getElementById('encryptMode').value;
+    const key = MODE_CONFIG[mode]; // 自動取得該模式對應的密碼
+    const input = document.getElementById('inputText').value;
+    const { charToBin } = getDynamicMap(key);
+    
+    let result = mode; // 開頭放入 5 碼識別碼
+    for (let char of input.toLowerCase()) {
+        if (charToBin[char] !== undefined) {
+            result += charToBin[char];
+        } else {
+            result += "?????"; 
+        }
+    }
+    document.getElementById('outputText').value = result;
+    document.getElementById('statusText').value = `加密成功！使用模式前綴：${mode}`;
+}
+
+// 智慧解密
+function decodeProcess() {
+    const input = document.getElementById('inputText').value;
+    let cleanInput = input.replace(/[^01]/g, "");
+    
+    if (cleanInput.length < 5) {
+        alert("密文長度不足，無法識別！");
+        return;
+    }
+    
+    // 💡 關鍵：擷取前 5 碼作為識別碼
+    const detectedHeader = cleanInput.substring(0, 5);
+    const key = MODE_CONFIG[detectedHeader];
+    
+    if (!key) {
+        document.getElementById('statusText').value = `解密失敗：無法識別的前綴 ${detectedHeader}`;
+        document.getElementById('outputText').value = "";
+        alert("未知的識別碼，無法解密！");
+        return;
+    }
+    
+    // 找到對應的密碼後，載入該模式的對照表
+    const { binToChar } = getDynamicMap(key);
+    let result = "";
+    
+    // 從第 6 碼 (索引 5) 開始解密
+    for (let i = 5; i < cleanInput.length; i += 5) {
+        let bin = cleanInput.substring(i, i + 5);
+        if (bin.length === 5) {
+            if (binToChar[bin] !== undefined) {
+                result += binToChar[bin];
+            }
+        }
+    }
+    
+    document.getElementById('outputText').value = result;
+    document.getElementById('statusText').value = `自動識別成功！偵測到前綴：${detectedHeader}，已自動套用對應解密演算法。`;
+}
+
+function copyResult() {
+    const outputText = document.getElementById('outputText');
+    if (!outputText.value) {
+        alert("沒有內容可以複製！");
+        return;
+    }
+    outputText.select();
+    outputText.setSelectionRange(0, 99999);
+    navigator.clipboard.writeText(outputText.value).then(() => {
+        alert("📋 已成功複製到剪貼簿！");
+    }).catch(err => {
+        alert("複製失敗，請手動複製");
+    });
+}
+</script>
+</body>
+</html>
