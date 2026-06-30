@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>智慧識別加解密網頁</title>
+    <title>智慧隨機加解密工具</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -19,7 +19,7 @@
         h2 { text-align: center; color: #2c3e50; }
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input[type="text"], textarea, select {
+        input[type="text"], textarea {
             width: 100%;
             padding: 10px;
             box-sizing: border-box;
@@ -49,53 +49,38 @@
             background-color: #e8f4fd;
             border-left: 4px solid #3498db;
             padding: 10px;
-            margin-bottom: 15px;
+            margin-bottom: 20px;
             font-size: 14px;
             border-radius: 0 4px 4px 0;
+            line-height: 1.5;
         }
     </style>
 </head>
 <body>
 
-    <h2>🔐 智慧識別加解密網頁</h2>
+    <h2>加解密工具</h2>
 
     <div class="info-box">
-        💡 <b>運作機制：</b><br>
-        • 模式一 <code>00000</code> → 對應密碼：AlphaSecret<br>
-        • 模式二 <code>11111</code> → 對應密碼：BetaSecret<br>
-        • 模式三 <code>10101</code> → 對應密碼：GammaSecret
+        🎲 <b>全自動隨機機制：</b><br>
+        每次加密都會隨機抽樣不同的排序演算法；解密時系統會自動辨識密文前綴，無須手動設定。
     </div>
 
     <div class="form-group">
-        <label for="encryptMode">⚙️ 選擇加密模式 (僅加密時需要選擇)：</label>
-        <select id="encryptMode">
-            <option value="00000">模式一 (前綴: 00000)</option>
-            <option value="11111">模式二 (前綴: 11111)</option>
-            <option value="10101">模式三 (前綴: 10101)</option>
-        </select>
-    </div>
-
-    <div class="form-group">
-        <label for="inputText">📝 輸入文字：</label>
-        <textarea id="inputText" placeholder="加密：輸入英文文字&#10;解密：直接貼上密文，系統會自動辨識前 5 碼並解密..."></textarea>
+        <label for="inputText">輸入文字：</label>
+        <textarea id="inputText" placeholder="加密：輸入英文或標點符號&#10;解密：直接貼上密文，系統會自動辨識並完成解密..."></textarea>
     </div>
 
     <div class="btn-group">
-        <button class="btn-encode" onclick="encodeProcess()">▲ 加密 (自動嵌入前綴)</button>
-        <button class="btn-decode" onclick="decodeProcess()">▼ 智慧解密 (自動識別)</button>
+        <button class="btn-encode" onclick="encodeProcess()">▲ 一鍵隨機加密</button>
+        <button class="btn-decode" onclick="decodeProcess()">▼ 智慧自動解密</button>
     </div>
 
     <div class="form-group" style="margin-top: 20px;">
-        <label for="statusText">📢 系統狀態：</label>
-        <input type="text" id="statusText" readonly style="background:#eee; color:#555;" value="準備就緒">
-    </div>
-
-    <div class="form-group">
-        <label for="outputText">✨ 輸出結果：</label>
+        <label for="outputText">輸出結果：</label>
         <textarea id="outputText" readonly placeholder="結果會顯示在這裡..."></textarea>
     </div>
 
-    <button class="btn-copy" onclick="copyResult()">📋 一鍵複製結果</button>
+    <button class="btn-copy" onclick="copyResult()">一鍵複製結果</button>
 
 <script>
 // 基礎字元
@@ -111,11 +96,16 @@ const BASE_BINARIES = [
     "00100", "01100", "11111", "10101", "01110", "11100", "00000", "11000"
 ];
 
-// 📊 模式與密碼的對應表 (你可以在這裡修改你的密碼和前綴)
+// 📊 內建 8 組後台模式與密碼對應表
 const MODE_CONFIG = {
-    "00000": "AlphaSecret", // 模式一的密碼
-    "11111": "BetaSecret",  // 模式二的密碼
-    "10101": "GammaSecret"  // 模式三的密碼
+    "00000": "Key_Alpha_01", 
+    "11111": "Key_Beta_02",  
+    "10101": "Key_Gamma_03",
+    "01010": "Key_Delta_04",
+    "11000": "Key_Epsilon_05",
+    "00111": "Key_Zeta_06",
+    "11100": "Key_Eta_07",
+    "00011": "Key_Theta_08"
 };
 
 // 偽隨機數產生器
@@ -169,15 +159,25 @@ function getDynamicMap(key) {
     return { charToBin, binToChar };
 }
 
-// 執行加密
+// 執行加密 (全自動隨機模式)
 function encodeProcess() {
-    const mode = document.getElementById('encryptMode').value;
-    const key = MODE_CONFIG[mode]; // 自動取得該模式對應的密碼
+    // 從 8 種前綴中自動隨機抽一組
+    const availableModes = Object.keys(MODE_CONFIG);
+    const randomIndex = Math.floor(Math.random() * availableModes.length);
+    const mode = availableModes[randomIndex];
+    
+    const key = MODE_CONFIG[mode]; 
     const input = document.getElementById('inputText').value;
     const { charToBin } = getDynamicMap(key);
     
-    let result = mode; // 開頭放入 5 碼識別碼
-    for (let char of input.toLowerCase()) {
+    // 標點符號容錯
+    let cleanInput = input.toLowerCase()
+        .replace(/\?/g, "？")
+        .replace(/,/g, "，")
+        .replace(/\./g, "。");
+    
+    let result = mode; // 置入識別前綴
+    for (let char of cleanInput) {
         if (charToBin[char] !== undefined) {
             result += charToBin[char];
         } else {
@@ -185,10 +185,9 @@ function encodeProcess() {
         }
     }
     document.getElementById('outputText').value = result;
-    document.getElementById('statusText').value = `加密成功！使用模式前綴：${mode}`;
 }
 
-// 智慧解密
+// 智慧解密 (後台自動讀取前綴、切換密碼，不顯露給使用者)
 function decodeProcess() {
     const input = document.getElementById('inputText').value;
     let cleanInput = input.replace(/[^01]/g, "");
@@ -198,22 +197,18 @@ function decodeProcess() {
         return;
     }
     
-    // 💡 關鍵：擷取前 5 碼作為識別碼
     const detectedHeader = cleanInput.substring(0, 5);
     const key = MODE_CONFIG[detectedHeader];
     
     if (!key) {
-        document.getElementById('statusText').value = `解密失敗：無法識別的前綴 ${detectedHeader}`;
         document.getElementById('outputText').value = "";
         alert("未知的識別碼，無法解密！");
         return;
     }
     
-    // 找到對應的密碼後，載入該模式的對照表
     const { binToChar } = getDynamicMap(key);
     let result = "";
     
-    // 從第 6 碼 (索引 5) 開始解密
     for (let i = 5; i < cleanInput.length; i += 5) {
         let bin = cleanInput.substring(i, i + 5);
         if (bin.length === 5) {
@@ -222,9 +217,7 @@ function decodeProcess() {
             }
         }
     }
-    
     document.getElementById('outputText').value = result;
-    document.getElementById('statusText').value = `自動識別成功！偵測到前綴：${detectedHeader}，已自動套用對應解密演算法。`;
 }
 
 function copyResult() {
